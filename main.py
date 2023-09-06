@@ -57,10 +57,27 @@ class Ui_MainWindow(object):
         self.btDeleteNullValue.setObjectName("btDeleteNullValue")
         button_layout.addWidget(self.btDeleteNullValue)
 
+        # Find Duplicated Values button setup
+        self.btDuplicateValue = QtWidgets.QPushButton(self.centralwidget)
+        self.btDuplicateValue.setObjectName("btFindNullValue")
+        button_layout.addWidget(self.btDuplicateValue)
+
+        # Delete Duplicated Values
+        self.btDeleteDuplicatedValue = QtWidgets.QPushButton(self.centralwidget)
+        self.btDeleteDuplicatedValue.setObjectName("btbtDeleteDuplicatedValue")
+        button_layout.addWidget(self.btDeleteDuplicatedValue)
+
+
         # Refresh button
         self.btRefreshData = QtWidgets.QPushButton(self.centralwidget)
         self.btRefreshData.setObjectName("btRefreshData")
         button_layout.addWidget(self.btRefreshData)
+
+
+        self.btRenameColumn = QPushButton(self.centralwidget)
+        self.btRenameColumn.setObjectName("btRenameColumn")
+        self.btRenameColumn.setText("Rename Column")
+        button_layout.addWidget(self.btRenameColumn)
 
         self.btLoad = QtWidgets.QPushButton(self.centralwidget)
         self.btLoad.setObjectName("btLoad")
@@ -117,14 +134,110 @@ class Ui_MainWindow(object):
         self.btAddEmptyRow.clicked.connect(self.addEmptyRow)
         self.btDeleteSelectedRow.clicked.connect(self.deleteSelectedRow)
         self.btFindNullValue.clicked.connect(self.markNullRows)
+        self.btRenameColumn.clicked.connect(self.renameColumn)
+        self.btDeleteNullValue.clicked.connect(self.deleteNullRows)
+        self.btDuplicateValue.clicked.connect(self.markDuplicateRows)
+        self.btDeleteDuplicatedValue.clicked.connect(self.deleteDuplicatedRows)
 
     
-    def markNullRows(self):
+
+    def deleteDuplicatedRows(self):
         # Lấy tab hiện tại
         current_index = self.tabWidget.currentIndex()
         if current_index >= 0:
-            table_widget = self.table_widgets[current_index]
             tab = self.tabWidget.widget(current_index)
+            table_widget = tab.findChild(QTableWidget)
+
+            rows_to_delete = []
+            no_duplicates = True  # Biến kiểm tra xem có giá trị trùng không
+
+            for row1 in range(table_widget.rowCount()):
+                for row2 in range(row1 + 1, table_widget.rowCount()):
+                    is_duplicate = True
+
+                    for col in range(table_widget.columnCount()):
+                        item1 = table_widget.item(row1, col)
+                        item2 = table_widget.item(row2, col)
+
+                        if item1 is not None and item2 is not None:
+                            if item1.text() != item2.text():
+                                is_duplicate = False
+                                break
+                        else:
+                            is_duplicate = False
+                            break
+
+                    if is_duplicate:
+                        rows_to_delete.append(row2)
+                        no_duplicates = False  # Có ít nhất một giá trị trùng
+
+            # Xóa các hàng trùng lặp từ dưới lên
+            rows_to_delete = list(set(rows_to_delete))  # Loại bỏ các dòng trùng lặp trong danh sách
+            rows_to_delete.sort(reverse=True)  # Sắp xếp dòng cần xóa từ dưới lên
+            for row in rows_to_delete:
+                table_widget.removeRow(row)
+
+            if no_duplicates:
+                self.showMessageBox("Delete Duplicated Rows", "No duplicate rows found.")
+            else:
+                self.showMessageBox("Delete Duplicated Rows", "Duplicate rows have been deleted.")
+        else:
+            self.showMessageBox("Info", "No tab selected.")
+
+    def markDuplicateRows(self):
+        # Lấy tab hiện tại
+        current_index = self.tabWidget.currentIndex()
+        if current_index >= 0:
+            tab = self.tabWidget.widget(current_index)
+            table_widget = tab.findChild(QTableWidget)
+
+            # Tạo một danh sách rỗng để lưu các dòng bị trùng
+            duplicate_rows = []
+            no_duplicates = True  # Biến kiểm tra xem có giá trị trùng không
+
+            for row1 in range(table_widget.rowCount()):
+                for row2 in range(row1 + 1, table_widget.rowCount()):
+                    is_duplicate = True
+
+                    for col in range(table_widget.columnCount()):
+                        item1 = table_widget.item(row1, col)
+                        item2 = table_widget.item(row2, col)
+
+                        if item1 is not None and item2 is not None:
+                            if item1.text() != item2.text():
+                                is_duplicate = False
+                                break
+                        else:
+                            is_duplicate = False
+                            break
+
+                    if is_duplicate:
+                        duplicate_rows.append(row1)
+                        duplicate_rows.append(row2)
+                        no_duplicates = False  # Có ít nhất một giá trị trùng
+
+            # Đánh dấu các dòng trùng bằng màu sắc hoặc biểu tượng
+            for row in duplicate_rows:
+                for col in range(table_widget.columnCount()):
+                    item = table_widget.item(row, col)
+                    if item is not None:
+                        item.setBackground(QtGui.QColor(255, 255, 0))  # Đặt màu nền là màu vàng cho các ô trong dòng trùng
+
+            if no_duplicates:
+                self.showMessageBox("Mark Duplicate Rows", "No duplicate rows found.")
+            else:
+                self.showMessageBox("Mark Duplicate Rows", "Duplicate rows have been marked.")
+        else:
+            self.showMessageBox("Info", "No tab selected.")
+
+
+    def deleteNullRows(self):
+        # Get the current tab index
+        current_index = self.tabWidget.currentIndex()
+        if current_index >= 0:
+            tab = self.tabWidget.widget(current_index)
+            table_widget = tab.findChild(QTableWidget)
+            rows_to_delete = []
 
             for row in range(table_widget.rowCount()):
                 null_row = False
@@ -135,17 +248,52 @@ class Ui_MainWindow(object):
                         if text == '' or text.lower() == 'nan' or (text.lower() == 'null'):
                             null_row = True
                             break
-                    
+
+                if null_row:
+                    rows_to_delete.append(row)
+
+            # Remove the rows with null values in reverse order to avoid shifting indices
+            for row in reversed(rows_to_delete):
+                table_widget.removeRow(row)
+
+            self.showMessageBox("Delete Null Rows", f"{len(rows_to_delete)} null rows deleted.")
+        else:
+            self.showMessageBox("Info", "No tab selected.")
+
+    def markNullRows(self):
+        # Lấy tab hiện tại
+        current_index = self.tabWidget.currentIndex()
+        if current_index >= 0:
+            table_widget = self.table_widgets[current_index]
+            tab = self.tabWidget.widget(current_index)
+
+            no_null_rows = True  # Biến kiểm tra xem có dòng nào chứa giá trị null không
+
+            for row in range(table_widget.rowCount()):
+                null_row = False
+                for col in range(table_widget.columnCount()):
+                    item = table_widget.item(row, col)
+                    if item is not None:
+                        text = item.text().strip()
+                        if text == '' or text.lower() == 'nan' or (text.lower() == 'null'):
+                            null_row = True
+                            break
+                        
                 # Đánh dấu dòng null bằng màu sắc hoặc biểu tượng
                 if null_row:
                     for col in range(table_widget.columnCount()):
                         item = table_widget.item(row, col)
                         if item is not None:
                             item.setBackground(QtGui.QColor(255, 0, 0)) # Đặt màu nền là đỏ cho các ô trong dòng null
+                    no_null_rows = False  # Có ít nhất một dòng chứa giá trị null
 
-            self.showMessageBox("Mark Null Rows", "Null rows have been marked.")
+            if no_null_rows:
+                self.showMessageBox("Mark Null Rows", "No rows containing null values found.")
+            else:
+                self.showMessageBox("Mark Null Rows", "Null rows have been marked.")
         else:
             self.showMessageBox("Info", "No tab selected.")
+
     def addEmptyRow(self):
         current_index = self.tabWidget.currentIndex()
         if current_index >= 0:
@@ -257,7 +405,7 @@ class Ui_MainWindow(object):
                 try:
                     if original_file_path.lower().endswith('.csv'):
                         # Write data to a CSV file
-                        with open(original_file_path, 'w', newline='') as csv_file:
+                        with open(original_file_path, 'w', newline='', encoding='utf-8') as csv_file:
                             writer = csv.writer(csv_file)
                             for row in data:
                                 writer.writerow(row)
@@ -307,7 +455,7 @@ class Ui_MainWindow(object):
                 try:
                     if save_file_path.endswith('.txt'):
                         # Save data to a text file
-                        with open(save_file_path, 'w') as file:
+                        with open(save_file_path, 'w', encoding='utf-8') as file:
                             for row in data:
                                 file.write(','.join(row) + '\n')
                     elif save_file_path.endswith('.csv'):
@@ -419,11 +567,12 @@ class Ui_MainWindow(object):
             else:
                 print("Unsupported file format")
                 return
-
+                
             # Get the currently selected tab
             current_index = self.tabWidget.currentIndex()
+            # Check how many tabs are ex
             if current_index >= 0:
-                tab = self.tabWidget.widget(current_index)
+                tab = self.tabWidget.widget(current_index)  
                 table_widget = tab.findChild(QTableWidget)
 
                 # Clear the existing table widget
@@ -442,6 +591,46 @@ class Ui_MainWindow(object):
 
                 # Store the original file path in the tab's tooltip
                 tab.setToolTip(file_path)
+                # Tự động đổi tên tab thành tên của file đã extract
+                file_name = os.path.basename(file_path)
+                self.tabWidget.setTabText(current_index, file_name)
+    def renameColumn(self):
+        # Lấy tab hiện tại
+        current_index = self.tabWidget.currentIndex()
+        if current_index >= 0:
+            tab = self.tabWidget.widget(current_index)
+            table_widget = tab.findChild(QTableWidget)
+
+            # Lấy danh sách cột được chọn
+            selected_columns = [item.column() for item in table_widget.selectedItems()]
+
+            # Kiểm tra xem có ít nhất một cột được chọn
+            if selected_columns:
+                # Hiển thị hộp thoại nhập văn bản để người dùng nhập tên cột mới
+                new_column_name, ok = QInputDialog.getText(
+                    self.centralwidget,
+                    "Rename Column",
+                    "Enter the new column name:",
+                )
+                if ok and new_column_name.strip():
+                    try:
+                        for col in selected_columns:
+                            current_column_name = table_widget.horizontalHeaderItem(col).text()
+                            # Đảm bảo tên cột mới không trùng với tên cột hiện có
+                            if new_column_name != current_column_name:
+                                table_widget.horizontalHeaderItem(col).setText(new_column_name)
+
+                        self.showMessageBox("Success", "Column renamed successfully!")
+
+                    except Exception as e:
+                        print(f"Error renaming column: {str(e)}")
+                        self.showMessageBox("Error", f"Error renaming column: {str(e)}")
+                else:
+                    self.showMessageBox("Info", "Invalid or empty column name.")
+            else:
+                self.showMessageBox("Info", "No column selected.")
+        else:
+            self.showMessageBox("Info", "No tab selected.")
     
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
@@ -459,7 +648,8 @@ class Ui_MainWindow(object):
         self.btRefreshData.setText(_translate("MainWindow", "Refresh Data"))
         self.btDeleteSelectedRow.setText(_translate("MainWindow", "Delete Selected Row"))
         self.btDeleteNullValue.setText(_translate("MainWindow", "Delete Null Value"))
-
+        self.btDuplicateValue.setText(_translate("MainWindow", "Find Duplicated Value"))
+        self.btDeleteDuplicatedValue.setText(_translate("MainWindow", "Delete Duplicated Value"))
 if __name__ == "__main__":
     import sys
     app = QtWidgets.QApplication(sys.argv)
