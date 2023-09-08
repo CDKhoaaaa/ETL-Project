@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import QDialog,QMessageBox,QFileDialog, QVBoxLayout, QPushB
 import pandas as pd
 
 
+
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         self.current_file_path = None
@@ -78,14 +79,10 @@ class Ui_MainWindow(object):
         self.btRenameColumn.setObjectName("btRenameColumn")
         self.btRenameColumn.setText("Rename Column")
         button_layout.addWidget(self.btRenameColumn)
-
-        self.btLoad = QtWidgets.QPushButton(self.centralwidget)
-        self.btLoad.setObjectName("btLoad")
         self.btAddTab = QtWidgets.QPushButton(self.centralwidget)
         self.btAddTab.setObjectName("btAddTab")
         self.btRemoveTab = QtWidgets.QPushButton(self.centralwidget)
         self.btRemoveTab.setObjectName("btRemoveTab")
-        button_layout.addWidget(self.btLoad)
         button_layout.addWidget(self.btAddTab)
         button_layout.addWidget(self.btRemoveTab)
 
@@ -106,7 +103,7 @@ class Ui_MainWindow(object):
         self.actionSave = QtGui.QAction(MainWindow)
         self.actionSave.setObjectName("actionSave")
 
-        # SetupUi Save As
+        # SetupUi Save As and Save
         self.actionSaveAs= QtGui.QAction(MainWindow)
         self.actionSaveAs.setObjectName("Save As")
         self.menuFile.addAction(self.actionSaveAs)
@@ -448,8 +445,8 @@ class Ui_MainWindow(object):
                     else:
                         row_data.append('')
                 data.append(row_data)
-
-            # Get the file path to save the data
+                
+            # Get the file path to save the data    
             save_file_path = self.getSaveFileName()
             if save_file_path:
                 try:
@@ -566,11 +563,11 @@ class Ui_MainWindow(object):
                 df = pd.read_excel(file_path)
             else:
                 print("Unsupported file format")
-                return
+                return  
                 
             # Get the currently selected tab
             current_index = self.tabWidget.currentIndex()
-            # Check how many tabs are ex
+            # Check how many tabs are existing
             if current_index >= 0:
                 tab = self.tabWidget.widget(current_index)  
                 table_widget = tab.findChild(QTableWidget)
@@ -594,6 +591,9 @@ class Ui_MainWindow(object):
                 # Tự động đổi tên tab thành tên của file đã extract
                 file_name = os.path.basename(file_path)
                 self.tabWidget.setTabText(current_index, file_name)
+            else:
+                self.showMessageBox("Info", "No tab selected.")
+
     def renameColumn(self):
         # Lấy tab hiện tại
         current_index = self.tabWidget.currentIndex()
@@ -637,13 +637,12 @@ class Ui_MainWindow(object):
         MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
         self.btExtract.setText(_translate("MainWindow", "Extract"))
         self.btFindNullValue.setText(_translate("MainWindow", "Find Null Values"))
-        self.btLoad.setText(_translate("MainWindow", "Load"))
         self.btAddTab.setText(_translate("MainWindow", "Add Tab"))
         self.btRemoveTab.setText(_translate("MainWindow", "Remove Tab"))
         self.menuFile.setTitle(_translate("MainWindow", "Window"))
         self.actionSave.setText(_translate("MainWindow", "Save"))
-        self.actionImport_File.setText(_translate("MainWindow", "Import File"))
         self.actionSaveAs.setText(_translate("MainWindow", "Save As"))
+        self.actionImport_File.setText(_translate("MainWindow", "Import File"))
         self.actionSave.setText(_translate("MainWindow", "Save"))
         self.btRefreshData.setText(_translate("MainWindow", "Refresh Data"))
         self.btDeleteSelectedRow.setText(_translate("MainWindow", "Delete Selected Row"))
