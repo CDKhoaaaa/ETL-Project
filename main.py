@@ -4,12 +4,16 @@ import openpyxl
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtWidgets import QDialog,QMessageBox,QFileDialog, QVBoxLayout, QPushButton, QTabWidget, QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem,QInputDialog
 import pandas as pd
+from collections import defaultdict
 
 
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
+        self.extract_start_row = None
+        self.extract_end_row = None
         self.current_file_path = None
+        self.duplicate_values = []
         self.table_widgets = []
         self.dialog = QDialog()
         MainWindow.setObjectName("MainWindow")
@@ -62,6 +66,11 @@ class Ui_MainWindow(object):
         self.btDuplicateValue = QtWidgets.QPushButton(self.centralwidget)
         self.btDuplicateValue.setObjectName("btFindNullValue")
         button_layout.addWidget(self.btDuplicateValue)
+
+        # Show List  Duplicated Values button setup
+        self.btShowDuplicatedList = QtWidgets.QPushButton(self.centralwidget)
+        self.btShowDuplicatedList.setObjectName("btShowDuplicatedList")
+        button_layout.addWidget(self.btShowDuplicatedList)
 
         # Delete Duplicated Values
         self.btDeleteDuplicatedValue = QtWidgets.QPushButton(self.centralwidget)
@@ -121,12 +130,12 @@ class Ui_MainWindow(object):
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
         # Connect actions
-        self.btExtract.clicked.connect(self.loadData)
         self.btAddTab.clicked.connect(self.addNewTab)
         self.btRemoveTab.clicked.connect(self.removeCurrentTab)
         self.tabWidget.tabBarDoubleClicked.connect(self.handleTabDoubleClick)
         self.actionSaveAs.triggered.connect(self.saveData)
         self.actionSave.triggered.connect(self.Save)
+        self.actionImport_File.triggered.connect(self.loadData)
         self.btRefreshData.clicked.connect(self.refreshData)
         self.btAddEmptyRow.clicked.connect(self.addEmptyRow)
         self.btDeleteSelectedRow.clicked.connect(self.deleteSelectedRow)
@@ -135,8 +144,65 @@ class Ui_MainWindow(object):
         self.btDeleteNullValue.clicked.connect(self.deleteNullRows)
         self.btDuplicateValue.clicked.connect(self.markDuplicateRows)
         self.btDeleteDuplicatedValue.clicked.connect(self.deleteDuplicatedRows)
+        self.btShowDuplicatedList.clicked.connect(self.showDuplicateValues)
+        self.btExtract.clicked.connect(self.extractData)
+    def extractData(self):
+        # Hiển thị một dialog để người dùng nhập khoảng dòng cần trích xuất
+        start_row, ok1 = QInputDialog.getInt(self.dialog, 'Extract Data', 'Start Row:')
+        if ok1:
+            end_row, ok2 = QInputDialog.getInt(self.dialog, 'Extract Data', 'End Row:')
+            if ok2:
+                # Tạo một tab mới
+                new_tab = QTableWidget()
 
-    
+                # Lấy tab hiện tại
+                current_tab_index = self.tabWidget.currentIndex()
+                current_tab = self.table_widgets[current_tab_index]
+
+                if current_tab.rowCount() == 0:
+                    QMessageBox.warning(self.dialog, 'Extract Data', 'Tab không có dữ liệu.')
+                    return
+
+                if start_row < 1 or end_row > current_tab.rowCount():
+                    QMessageBox.warning(self.dialog, 'Extract Data', 'Khoảng dòng không hợp lệ.')
+                    return
+
+                # Tạo DataFrame từ dữ liệu trong tab hiện tại
+                data = []
+                for row in range(start_row - 1, end_row):
+                    row_data = []
+                    for col in range(current_tab.columnCount()):
+                        item = current_tab.item(row, col)
+                        if item:
+                            row_data.append(item.text())
+                        else:
+                            row_data.append("")  # Xử lý dữ liệu null
+                    data.append(row_data)
+
+                df = pd.DataFrame(data, columns=[current_tab.horizontalHeaderItem(col).text() for col in range(current_tab.columnCount())])
+
+                # Thiết lập số hàng và cột cho QTableWidget mới
+                new_tab.setRowCount(df.shape[0])
+                new_tab.setColumnCount(df.shape[1])
+                new_tab.setHorizontalHeaderLabels(df.columns.tolist())
+
+                for row in range(df.shape[0]):
+                    for col in range(df.shape[1]):
+                        item = QTableWidgetItem(str(df.iloc[row, col]))
+                        new_tab.setItem(row, col, item)
+
+                # Thêm tab mới vào QTabWidget và danh sách các QTableWidget
+                tab_name = f"Extracted {start_row}-{end_row}"
+                self.tabWidget.addTab(new_tab, tab_name)
+                self.table_widgets.append(new_tab)
+
+                # Chuyển sang tab mới tạo
+                self.tabWidget.setCurrentWidget(new_tab)
+
+                # In thông báo thành công
+                QMessageBox.information(self.dialog, 'Extract Data', 'Trích xuất dữ liệu thành công.')
+
+
 
     def deleteDuplicatedRows(self):
         # Lấy tab hiện tại
@@ -187,45 +253,73 @@ class Ui_MainWindow(object):
         if current_index >= 0:
             tab = self.tabWidget.widget(current_index)
             table_widget = tab.findChild(QTableWidget)
+            
+            if table_widget is not None:
+                # Giới hạn số lượng dòng kiểm tra
+                max_rows_to_check = 1000  # Điều chỉnh số lượng dòng tại đây
+                row_count = min(max_rows_to_check, table_widget.rowCount())
 
-            # Tạo một danh sách rỗng để lưu các dòng bị trùng
-            duplicate_rows = []
-            no_duplicates = True  # Biến kiểm tra xem có giá trị trùng không
+                # Tạo từ điển để lưu trữ dữ liệu của từng dòng
+                row_data = defaultdict(list)
+                duplicate_rows = []
+                duplicate_values = []
 
-            for row1 in range(table_widget.rowCount()):
-                for row2 in range(row1 + 1, table_widget.rowCount()):
-                    is_duplicate = True
-
+                # Xây dựng từ điển dữ liệu từ bảng
+                for row in range(row_count):
+                    row_values = []
                     for col in range(table_widget.columnCount()):
-                        item1 = table_widget.item(row1, col)
-                        item2 = table_widget.item(row2, col)
-
-                        if item1 is not None and item2 is not None:
-                            if item1.text() != item2.text():
-                                is_duplicate = False
-                                break
+                        item = table_widget.item(row, col)
+                        if item is not None:
+                            row_values.append(item.text())
                         else:
-                            is_duplicate = False
-                            break
+                            row_values.append(None)
+                    row_data[tuple(row_values)].append(row)
 
-                    if is_duplicate:
-                        duplicate_rows.append(row1)
-                        duplicate_rows.append(row2)
-                        no_duplicates = False  # Có ít nhất một giá trị trùng
+                # Tìm các dòng trùng lặp
+                for rows in row_data.values():
+                    if len(rows) > 1:
+                        duplicate_rows.extend(rows)
+                        duplicate_values.extend(rows)
+                self.duplicate_values = duplicate_values
 
-            # Đánh dấu các dòng trùng bằng màu sắc hoặc biểu tượng
-            for row in duplicate_rows:
-                for col in range(table_widget.columnCount()):
-                    item = table_widget.item(row, col)
-                    if item is not None:
-                        item.setBackground(QtGui.QColor(255, 255, 0))  # Đặt màu nền là màu vàng cho các ô trong dòng trùng
+                # Đánh dấu các dòng trùng bằng màu sắc hoặc biểu tượng
+                for row in duplicate_rows:
+                    for col in range(table_widget.columnCount()):
+                        item = table_widget.item(row, col)
+                        if item is not None:
+                            item.setBackground(QtGui.QColor(255, 255, 0))  # Đặt màu nền là màu vàng cho các ô trong dòng trùng
 
-            if no_duplicates:
-                self.showMessageBox("Mark Duplicate Rows", "No duplicate rows found.")
+                if not duplicate_rows:
+                    self.showMessageBox("Mark Duplicate Rows", "No duplicate rows found.")
+                else:
+                    self.showMessageBox("Mark Duplicate Rows", "Duplicate rows have been marked.")
             else:
-                self.showMessageBox("Mark Duplicate Rows", "Duplicate rows have been marked.")
+                self.showMessageBox("Mark Duplicate Rows", "Tab hiện tại không chứa QTableWidget.")
         else:
             self.showMessageBox("Info", "No tab selected.")
+
+
+    def showDuplicateValues(self):
+        if self.duplicate_values:
+            # Tạo một cửa sổ mới để hiển thị danh sách các dòng lặp
+            duplicate_values_dialog = QDialog()
+            duplicate_values_dialog.setWindowTitle("Duplicate Rows")
+            duplicate_values_dialog.setGeometry(100, 100, 400, 400)
+
+            # Tạo một danh sách để hiển thị các dòng lặp
+            duplicate_rows_list = QtWidgets.QListWidget(duplicate_values_dialog)
+
+            # Thêm các dòng lặp vào danh sách
+            for row_index in self.duplicate_values:
+                item_text = f"Row {row_index + 1}"  # Display row numbers (assuming 1-based indexing)
+                item = QtWidgets.QListWidgetItem(item_text)
+                duplicate_rows_list.addItem(item)
+
+            # Hiển thị cửa sổ
+            duplicate_values_dialog.exec()
+        else:
+            self.showMessageBox("Info", "No duplicate rows found.")
+
 
 
     def deleteNullRows(self):
@@ -311,6 +405,11 @@ class Ui_MainWindow(object):
             # Lấy danh sách các hàng được chọn
             selected_rows = set(item.row() for item in table_widget.selectedItems())
 
+            # Kiểm tra xem có hàng nào được chọn không
+            if not selected_rows:
+                self.showMessageBox("Info", "No rows selected.")
+                return  # Thoát khỏi hàm nếu không có hàng nào được chọn
+
             # Sắp xếp các hàng theo thứ tự giảm dần để xóa chúng từ dưới lên
             rows_to_delete = sorted(list(selected_rows), reverse=True)
 
@@ -320,6 +419,7 @@ class Ui_MainWindow(object):
             self.showMessageBox("Success", "Selected rows deleted successfully!")
         else:
             self.showMessageBox("Info", "No tab selected.")
+
 
     def refreshData(self):
         # Kiểm tra xem có đường dẫn file dữ liệu hiện tại không
@@ -644,11 +744,12 @@ class Ui_MainWindow(object):
         self.actionSaveAs.setText(_translate("MainWindow", "Save As"))
         self.actionImport_File.setText(_translate("MainWindow", "Import File"))
         self.actionSave.setText(_translate("MainWindow", "Save"))
-        self.btRefreshData.setText(_translate("MainWindow", "Refresh Data"))
+        self.btRefreshData.setText(_translate("MainWindow", "Reload"))
         self.btDeleteSelectedRow.setText(_translate("MainWindow", "Delete Selected Row"))
         self.btDeleteNullValue.setText(_translate("MainWindow", "Delete Null Value"))
         self.btDuplicateValue.setText(_translate("MainWindow", "Find Duplicated Value"))
         self.btDeleteDuplicatedValue.setText(_translate("MainWindow", "Delete Duplicated Value"))
+        self.btShowDuplicatedList.setText(_translate("MainWindow", "Show Duplicated Row List"))
 if __name__ == "__main__":
     import sys
     app = QtWidgets.QApplication(sys.argv)
